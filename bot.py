@@ -1,12 +1,14 @@
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackContext
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, ConversationHandler,
+    ContextTypes, filters
+)
 
 TOKEN = '7878760566:AAGwHJGLSnXmHgv9o2tFiw5we1v8XsMSleE'
 
 CHOOSING_ACTION, CHOOSING_REGION, ENTER_PARAMS = range(3)
 
 def calculate_local_delivery(volume):
-    # Пример функции для расчёта локального довоза, замени на свою логику
     if volume < 1:
         return 20
     elif volume < 5:
@@ -14,21 +16,21 @@ def calculate_local_delivery(volume):
     else:
         return 100
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Привет! Выбери действие.")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Выбери действие.")
     return CHOOSING_ACTION
 
-def choose_action(update: Update, context: CallbackContext):
-    update.message.reply_text("Выбери регион.")
+async def choose_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Выбери регион.")
     return CHOOSING_REGION
 
-def region_chosen(update: Update, context: CallbackContext):
+async def region_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     region = update.message.text
     context.user_data['region'] = region
-    update.message.reply_text(f"Выбран регион: {region}. Введи вес и объем через запятую, например: 1200, 3.5")
+    await update.message.reply_text(f"Выбран регион: {region}. Введи вес и объем через запятую, например: 1200, 3.5")
     return ENTER_PARAMS
 
-def enter_params(update: Update, context: CallbackContext):
+async def enter_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text
         weight, volume = text.split(',')
@@ -43,7 +45,7 @@ def enter_params(update: Update, context: CallbackContext):
         total = base_tariff + 150 + 50 + local_delivery
         total_with_fee = round(total * 1.025, 2)
 
-        update.message.reply_text(
+        await update.message.reply_text(
             f"Регион: {context.user_data['region']}\n"
             f"Вес: {weight} кг\n"
             f"Объем: {volume} м³\n"
@@ -56,30 +58,28 @@ def enter_params(update: Update, context: CallbackContext):
         )
         return ConversationHandler.END
     except Exception:
-        update.message.reply_text("Ошибка ввода. Пример: 1200, 3.5")
+        await update.message.reply_text("Ошибка ввода. Пример: 1200, 3.5")
         return ENTER_PARAMS
 
-def cancel(update: Update, context: CallbackContext):
-    update.message.reply_text("Отменено.")
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Отменено.")
     return ConversationHandler.END
 
 def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            CHOOSING_ACTION: [MessageHandler(Filters.text & ~Filters.command, choose_action)],
-            CHOOSING_REGION: [MessageHandler(Filters.text & ~Filters.command, region_chosen)],
-            ENTER_PARAMS: [MessageHandler(Filters.text & ~Filters.command, enter_params)],
+            CHOOSING_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_action)],
+            CHOOSING_REGION: [MessageHandler(filters.TEXT & ~filters.COMMAND, region_chosen)],
+            ENTER_PARAMS: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_params)],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
 
-    dp.add_handler(conv_handler)
-    updater.start_polling()
-    updater.idle()
+    app.add_handler(conv_handler)
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
